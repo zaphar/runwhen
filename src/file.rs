@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 use std::thread;
-use std::sync::{Arc,RwLock};
+use std::sync::{Arc,Mutex};
 use std::time::Duration;
 use std::path::Path;
 use std::sync::mpsc::channel;
@@ -37,33 +37,27 @@ impl<'a> FileProcess<'a> {
     }
 }
 
-fn spawn_runner_thread(lock: Arc<RwLock<bool>>, cmd: String, poll: Duration) {
+fn spawn_runner_thread(lock: Arc<Mutex<bool>>, cmd: String, poll: Duration) {
     thread::spawn(move || {
         loop {
             // Wait our requisit number of seconds
             thread::sleep(poll);
             // Default to not running the command.
-            let should_run = { // get a new scope for our read lock.
-                // Check our evt drop off.
-                *(lock.read().unwrap())
-            }; // drop our read lock
-            if should_run {
-                { // Set a new scope for our write lock.
-                    let mut signal = lock.write().unwrap();
-                    // set signal to false so we won't trigger on the
-                    // next loop iteration unless we recieved more events.
-                    *signal = false;
-                    // Run our command!
-                    if let Err(err) = run_cmd(&cmd) {
-                        println!("{:?}", err)
-                    }
-                } // drop our write lock.
+            let mut signal = lock.lock().unwrap();
+            if *signal {
+                // set signal to false so we won't trigger on the
+                // next loop iteration unless we recieved more events.
+                *signal = false;
+                // Run our command!
+                if let Err(err) = run_cmd(&cmd) {
+                    println!("{:?}", err)
+                }
             }
         }
     });
 }
 
-fn wait_for_fs_events(lock: Arc<RwLock<bool>>, method: WatchEventType, file: &str) -> Result<(), CommandError> {
+fn wait_for_fs_events(lock: Arc<Mutex<bool>>, method: WatchEventType, file: &str) -> Result<(), CommandError> {
     // Notify requires a channel for communication.
     let (tx, rx) = channel();
     let mut watcher = try!(watcher(tx, Duration::from_secs(1)));
@@ -88,12 +82,12 @@ fn wait_for_fs_events(lock: Arc<RwLock<bool>>, method: WatchEventType, file: &st
             },
             WatchEventType::Touched => {
                 if method == WatchEventType::Touched {
-                    let mut signal = lock.write().unwrap();
+                    let mut signal = lock.lock().unwrap();
                     *signal = true;
                 }
             },
             WatchEventType::Changed => {
-                let mut signal = lock.write().unwrap();
+                let mut signal = lock.lock().unwrap();
                 *signal = true;
             }
         }
@@ -109,7 +103,7 @@ impl<'a> Process for FileProcess<'a> {
     }
     // TODO(jeremy): Is this sufficent or do we want to ignore
     // any events that come in while the command is running?
-    let lock = Arc::new(RwLock::new(false));
+    let lock = Arc::new(Mutex::new(false));
     spawn_runner_thread(lock.clone(), self.cmd.to_string(), self.poll);
     wait_for_fs_events(lock, self.method.clone(), self.file)
     }

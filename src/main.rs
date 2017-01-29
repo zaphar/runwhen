@@ -11,6 +11,7 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+//! runwhen - A utility that runs commands on user defined triggers.
 #[macro_use]
 extern crate clap;
 extern crate humantime;
@@ -64,7 +65,7 @@ fn do_flags<'a>() -> clap::ArgMatches<'a> {
 fn main() {
     let app = do_flags();
     // Unwrap because this flag is required.
-    let cmd = app.value_of("cmd").unwrap();
+    let cmd = app.value_of("cmd").expect("cmd flag is required");
     let mut process: Option<Box<Process>> = None;
     if let Some(matches) = app.subcommand_matches("watch") {
         // Unwrap because this flag is required.
@@ -74,11 +75,11 @@ fn main() {
             method = WatchEventType::Touched;
         }
         let poll = matches.value_of("poll").unwrap_or("5s");
-        let dur = humantime::parse_duration(poll).unwrap();
+        let dur = humantime::parse_duration(poll).expect("Invalid poll value.");
         process = Some(Box::new(FileProcess::new(cmd, file, method, dur)));
     } else if let Some(matches) = app.subcommand_matches("timer") {
         // Unwrap because this flag is required.
-        let dur = humantime::parse_duration(matches.value_of("duration").unwrap());
+        let dur = humantime::parse_duration(matches.value_of("duration").expect("duration flag is required"));
         match dur {
             Ok(duration) =>{
                 let max_repeat = if let Some(val) = matches.value_of("repeat") {
@@ -102,7 +103,7 @@ fn main() {
         }
     } else if let Some(matches) = app.subcommand_matches("success") {
         // unwrap because this is required.
-        let ifcmd = matches.value_of("ifcmd").unwrap();
+        let ifcmd = matches.value_of("ifcmd").expect("ifcmd flag is required");
         let dur = humantime::parse_duration(
             matches.value_of("poll").unwrap_or("5s"));
         process = match dur {

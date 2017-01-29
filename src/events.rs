@@ -23,7 +23,6 @@ pub enum WatchEventType {
 
 impl From<DebouncedEvent> for WatchEventType {
     fn from(e: DebouncedEvent) -> WatchEventType {
-        println!("Found event: {:?}", e);
         match e {
             DebouncedEvent::Chmod(_) => WatchEventType::Touched,
             DebouncedEvent::Create(_) => WatchEventType::Touched,
