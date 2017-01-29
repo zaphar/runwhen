@@ -1,0 +1,12 @@
+[package]
+name = "runwhen"
+version = "0.1.0"
+authors = ["Jeremy Wall <jeremy@marzhillstudios.com>"]
+description = "Runs a command on user specified triggers."
+
+[dependencies]
+clap = "~2.19.0"
+humantime = "~1.0.0"
+notify = "~3.0.0"
+md5 = "~0.3.2"
+subprocess = "~0.1.7"
