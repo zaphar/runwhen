@@ -7,11 +7,9 @@ repository = "https://github.com/zaphar/runwhen"
 readme = "README.md"
 keywords = ["file", "watcher", "command-line", "trigger"]
 license = "Apache-2.0"
-license-file = "LICENSE.txt"
 
 [dependencies]
 clap = "~2.19.0"
 humantime = "~1.0.0"
 notify = "~3.0.0"
-md5 = "~0.3.2"
 subprocess = "~0.1.7"

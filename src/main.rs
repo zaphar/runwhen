@@ -15,7 +15,6 @@
 #[macro_use]
 extern crate clap;
 extern crate humantime;
-extern crate md5;
 extern crate notify;
 extern crate subprocess;
 
