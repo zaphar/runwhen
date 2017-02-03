@@ -52,14 +52,19 @@ fn spawn_runner_thread(lock: Arc<Mutex<bool>>, cmd: String, poll: Duration) {
             // Wait our requisit number of seconds
             thread::sleep(poll);
             // Default to not running the command.
-            let mut signal = lock.lock().unwrap();
-            if *signal {
-                // set signal to false so we won't trigger on the
-                // next loop iteration unless we recieved more events.
-                *signal = false;
-                // Run our command!
-                if let Err(err) = run_cmd(&cmd) {
-                    println!("{:?}", err)
+            match lock.lock() {
+                Ok(mut signal) => if *signal {
+                    // set signal to false so we won't trigger on the
+                    // next loop iteration unless we recieved more events.
+                    *signal = false;
+                    // Run our command!
+                    if let Err(err) = run_cmd(&cmd) {
+                        println!("{:?}", err)
+                    }
+                },
+                Err(err) => {
+                    println!("Unexpected error; {}", err);
+                    return
                 }
             }
         }
@@ -96,7 +101,13 @@ fn wait_for_fs_events(lock: Arc<Mutex<bool>>,
             }
             WatchEventType::Changed => {
                 let mut signal = lock.lock().unwrap();
-                *signal = true;
+                match lock.lock() {
+                    Ok(mut signal) => *signal = true,
+                    Err(err) => {
+                        println!("Unexpected error; {}", err);
+                        return Ok(())
+                    }
+                }
             }
         }
     }
