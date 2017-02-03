@@ -18,7 +18,7 @@ pub enum WatchEventType {
     Touched,
     Changed,
     Error,
-    Ignore
+    Ignore,
 }
 
 impl From<DebouncedEvent> for WatchEventType {
@@ -32,7 +32,7 @@ impl From<DebouncedEvent> for WatchEventType {
             DebouncedEvent::NoticeRemove(_) => WatchEventType::Ignore,
             DebouncedEvent::NoticeWrite(_) => WatchEventType::Ignore,
             DebouncedEvent::Rescan => WatchEventType::Ignore,
-            DebouncedEvent::Error(_, _) => WatchEventType::Ignore
+            DebouncedEvent::Error(_, _) => WatchEventType::Ignore,
         }
     }
 }

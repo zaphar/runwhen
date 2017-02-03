@@ -14,7 +14,7 @@
 use std::thread;
 use std::time::Duration;
 
-use subprocess::{Exec,PopenError,ExitStatus};
+use subprocess::{Exec, PopenError, ExitStatus};
 
 use traits::Process;
 use error::CommandError;
@@ -39,7 +39,11 @@ pub struct ExecProcess<'a> {
 
 impl<'a> ExecProcess<'a> {
     pub fn new(test_cmd: &'a str, cmd: &'a str, poll: Duration) -> ExecProcess<'a> {
-        ExecProcess{test_cmd: test_cmd, cmd: cmd, poll: poll}
+        ExecProcess {
+            test_cmd: test_cmd,
+            cmd: cmd,
+            poll: poll,
+        }
     }
 }
 

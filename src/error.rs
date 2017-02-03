@@ -23,9 +23,7 @@ pub struct CommandError {
 
 impl CommandError {
     pub fn new(msg: String) -> CommandError {
-        CommandError{
-            msg: msg
-        }
+        CommandError { msg: msg }
     }
 }
 

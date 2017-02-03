@@ -12,12 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 use std::thread;
-use std::sync::{Arc,Mutex};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::path::Path;
 use std::sync::mpsc::channel;
 
-use notify::{Watcher,RecursiveMode,watcher};
+use notify::{Watcher, RecursiveMode, watcher};
 
 use traits::Process;
 use error::CommandError;
@@ -32,8 +32,17 @@ pub struct FileProcess<'a> {
 }
 
 impl<'a> FileProcess<'a> {
-    pub fn new(cmd: &'a str, file: &'a str, method: WatchEventType, poll: Duration) -> FileProcess<'a> {
-        FileProcess{ cmd: cmd, file: file, method: method, poll: poll}
+    pub fn new(cmd: &'a str,
+               file: &'a str,
+               method: WatchEventType,
+               poll: Duration)
+               -> FileProcess<'a> {
+        FileProcess {
+            cmd: cmd,
+            file: file,
+            method: method,
+            poll: poll,
+        }
     }
 }
 
@@ -57,7 +66,10 @@ fn spawn_runner_thread(lock: Arc<Mutex<bool>>, cmd: String, poll: Duration) {
     });
 }
 
-fn wait_for_fs_events(lock: Arc<Mutex<bool>>, method: WatchEventType, file: &str) -> Result<(), CommandError> {
+fn wait_for_fs_events(lock: Arc<Mutex<bool>>,
+                      method: WatchEventType,
+                      file: &str)
+                      -> Result<(), CommandError> {
     // Notify requires a channel for communication.
     let (tx, rx) = channel();
     let mut watcher = try!(watcher(tx, Duration::from_secs(1)));
@@ -66,26 +78,22 @@ fn wait_for_fs_events(lock: Arc<Mutex<bool>>, method: WatchEventType, file: &str
     println!("Watching {:?}", file);
     loop {
         let evt: WatchEventType = match rx.recv() {
-            Ok(event) => {
-                WatchEventType::from(event)
-            },
-            Err(_) => {
-                WatchEventType::Error
-            }
+            Ok(event) => WatchEventType::from(event),
+            Err(_) => WatchEventType::Error,
         };
         match evt {
             WatchEventType::Ignore => {
                 // We ignore this one.
-            },
+            }
             WatchEventType::Error => {
                 // We log this one.
-            },
+            }
             WatchEventType::Touched => {
                 if method == WatchEventType::Touched {
                     let mut signal = lock.lock().unwrap();
                     *signal = true;
                 }
-            },
+            }
             WatchEventType::Changed => {
                 let mut signal = lock.lock().unwrap();
                 *signal = true;
@@ -96,15 +104,15 @@ fn wait_for_fs_events(lock: Arc<Mutex<bool>>, method: WatchEventType, file: &str
 
 impl<'a> Process for FileProcess<'a> {
     fn run(&self) -> Result<(), CommandError> {
-    // NOTE(jwall): this is necessary because notify::fsEventWatcher panics
-    // if the path doesn't exist. :-(
-    if !Path::new(self.file).exists() {
-        return Err(CommandError::new(format!("No such path! {0}", self.file).to_string()))
-    }
-    // TODO(jeremy): Is this sufficent or do we want to ignore
-    // any events that come in while the command is running?
-    let lock = Arc::new(Mutex::new(false));
-    spawn_runner_thread(lock.clone(), self.cmd.to_string(), self.poll);
-    wait_for_fs_events(lock, self.method.clone(), self.file)
+        // NOTE(jwall): this is necessary because notify::fsEventWatcher panics
+        // if the path doesn't exist. :-(
+        if !Path::new(self.file).exists() {
+            return Err(CommandError::new(format!("No such path! {0}", self.file).to_string()));
+        }
+        // TODO(jeremy): Is this sufficent or do we want to ignore
+        // any events that come in while the command is running?
+        let lock = Arc::new(Mutex::new(false));
+        spawn_runner_thread(lock.clone(), self.cmd.to_string(), self.poll);
+        wait_for_fs_events(lock, self.method.clone(), self.file)
     }
 }
