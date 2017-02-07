@@ -58,6 +58,7 @@ fn spawn_runner_thread(lock: Arc<Mutex<bool>>, cmd: String, poll: Duration) {
                     // next loop iteration unless we recieved more events.
                     *signal = false;
                     // Run our command!
+                    println!("exec: {}", cmd);
                     if let Err(err) = run_cmd(&cmd) {
                         println!("{:?}", err)
                     }
@@ -100,7 +101,6 @@ fn wait_for_fs_events(lock: Arc<Mutex<bool>>,
                 }
             }
             WatchEventType::Changed => {
-                let mut signal = lock.lock().unwrap();
                 match lock.lock() {
                     Ok(mut signal) => *signal = true,
                     Err(err) => {
