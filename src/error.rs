@@ -22,8 +22,8 @@ pub struct CommandError {
 }
 
 impl CommandError {
-    pub fn new(msg: String) -> CommandError {
-        CommandError { msg: msg }
+    pub fn new<S: Into<String>>(msg: S) -> CommandError {
+        CommandError { msg: msg.into() }
     }
 }
 

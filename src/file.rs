@@ -26,6 +26,7 @@ use exec::run_cmd;
 
 pub struct FileProcess<'a> {
     cmd: &'a str,
+    env: Option<Vec<&'a str>>,
     file: &'a str,
     method: WatchEventType,
     poll: Duration,
@@ -33,12 +34,14 @@ pub struct FileProcess<'a> {
 
 impl<'a> FileProcess<'a> {
     pub fn new(cmd: &'a str,
+               env: Option<Vec<&'a str>>,
                file: &'a str,
                method: WatchEventType,
                poll: Duration)
                -> FileProcess<'a> {
         FileProcess {
             cmd: cmd,
+            env: env,
             file: file,
             method: method,
             poll: poll,
@@ -46,8 +49,20 @@ impl<'a> FileProcess<'a> {
     }
 }
 
-fn spawn_runner_thread(lock: Arc<Mutex<bool>>, cmd: String, poll: Duration) {
+fn spawn_runner_thread(lock: Arc<Mutex<bool>>, cmd: String,
+                       env: Option<Vec<&str>>, poll: Duration) {
+    let copied_env = env.and_then(|v| Some(v.iter().cloned().map(|s| String::from(s)).collect::<Vec<String>>()));
     thread::spawn(move || {
+        let copied_env_refs: Option<Vec<&str>> = match copied_env {
+            Some(ref vec) => {
+                let mut refs: Vec<&str> = Vec::new();
+                for s in vec.iter() {
+                    refs.push(s);
+                }
+                Some(refs)
+            },
+            None => None,
+        };
         loop {
             // Wait our requisit number of seconds
             thread::sleep(poll);
@@ -59,7 +74,7 @@ fn spawn_runner_thread(lock: Arc<Mutex<bool>>, cmd: String, poll: Duration) {
                     *signal = false;
                     // Run our command!
                     println!("exec: {}", cmd);
-                    if let Err(err) = run_cmd(&cmd) {
+                    if let Err(err) = run_cmd(&cmd, &copied_env_refs) {
                         println!("{:?}", err)
                     }
                 },
@@ -123,7 +138,7 @@ impl<'a> Process for FileProcess<'a> {
         // TODO(jeremy): Is this sufficent or do we want to ignore
         // any events that come in while the command is running?
         let lock = Arc::new(Mutex::new(false));
-        spawn_runner_thread(lock.clone(), self.cmd.to_string(), self.poll);
+        spawn_runner_thread(lock.clone(), self.cmd.to_string(), self.env.clone(), self.poll);
         wait_for_fs_events(lock, self.method.clone(), self.file)
     }
 }

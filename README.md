@@ -6,14 +6,15 @@
 Runs a command on user defined triggers.
 
 USAGE:
-    runwhen --cmd <cmd> [SUBCOMMAND]
+    runwhen [OPTIONS] --cmd <cmd> [SUBCOMMAND]
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-    -c, --cmd <cmd>    Command to run on supplied triggers
+    -c, --cmd <cmd>       Command to run on supplied triggers
+    -e, --env <env>...    Command to run on supplied triggers
 
 SUBCOMMANDS:
     help       Prints this message or the help of the given subcommand(s)

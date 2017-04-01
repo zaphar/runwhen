@@ -20,14 +20,19 @@ use exec::run_cmd;
 
 pub struct TimerProcess<'a> {
     cmd: &'a str,
+    env: Option<Vec<&'a str>>,
     poll_duration: Duration,
     max_repeat: Option<u32>,
 }
 
 impl<'a> TimerProcess<'a> {
-    pub fn new(cmd: &'a str, poll_duration: Duration, max_repeat: Option<u32>) -> TimerProcess<'a> {
+    pub fn new(cmd: &'a str,
+               env: Option<Vec<&'a str>>,
+               poll_duration: Duration,
+               max_repeat: Option<u32>) -> TimerProcess<'a> {
         TimerProcess {
             cmd: cmd,
+            env: env,
             poll_duration: poll_duration,
             max_repeat: max_repeat,
         }
@@ -41,7 +46,7 @@ impl<'a> Process for TimerProcess<'a> {
             if self.max_repeat.is_some() && counter >= self.max_repeat.unwrap() {
                 return Ok(());
             }
-            if let Err(err) = run_cmd(self.cmd) {
+            if let Err(err) = run_cmd(self.cmd, &self.env) {
                 println!("{:?}", err)
             }
             thread::sleep(self.poll_duration);
