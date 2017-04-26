@@ -1,6 +1,6 @@
 [package]
 name = "runwhen"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Jeremy Wall <jeremy@marzhillstudios.com>"]
 description = "Runs a command on user specified triggers."
 repository = "https://github.com/zaphar/runwhen"
