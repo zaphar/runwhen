@@ -62,6 +62,8 @@ fn do_flags<'a>() -> clap::ArgMatches<'a> {
              (about: "Trigger that fires if a command runs successful.")
              (@arg ifcmd: --if +required +takes_value
               "The command to test for successful exit from")
+             (@arg not: --not
+              "Negate the test command so we run on failure instead of success.")
              (@arg wait: --poll +takes_value
               "How frequently to test command (default 5s)")
             )
@@ -122,9 +124,10 @@ fn main() {
     } else if let Some(matches) = app.subcommand_matches("success") {
         // unwrap because this is required.
         let ifcmd = matches.value_of("ifcmd").expect("ifcmd flag is required");
+        let negate = matches.is_present("not");
         let dur = humantime::parse_duration(matches.value_of("poll").unwrap_or("5s"));
         process = match dur {
-            Ok(duration) => Some(Box::new(ExecProcess::new(ifcmd, cmd, maybe_env, duration))),
+            Ok(duration) => Some(Box::new(ExecProcess::new(ifcmd, cmd, negate, maybe_env, duration))),
             Err(msg) => {
                 println!("Malformed poll {:?}", msg);
                 process::exit(1)

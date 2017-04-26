@@ -67,6 +67,7 @@ fn is_cmd_success(cmd: &str, env: Option<Vec<&str>>) -> bool {
 
 pub struct ExecProcess<'a> {
     test_cmd: &'a str,
+    negate: bool,
     cmd: &'a str,
     env: Option<Vec<&'a str>>,
     poll: Duration,
@@ -75,10 +76,12 @@ pub struct ExecProcess<'a> {
 impl<'a> ExecProcess<'a> {
     pub fn new(test_cmd: &'a str,
                cmd: &'a str,
+               negate: bool,
                env: Option<Vec<&'a str>>,
                poll: Duration) -> ExecProcess<'a> {
         ExecProcess {
             test_cmd: test_cmd,
+            negate: negate,
             cmd: cmd,
             env: env,
             poll: poll,
@@ -90,7 +93,8 @@ impl<'a> Process for ExecProcess<'a> {
     fn run(&self) -> Result<(), CommandError> {
         loop {
             // TODO(jwall): Should we set the environment the same as the other command?
-            if is_cmd_success(self.test_cmd, None) {
+            let test_result = is_cmd_success(self.test_cmd, None);
+            if (test_result && !self.negate) || (!test_result && self.negate) {
                 if let Err(err) = run_cmd(self.cmd, &self.env) {
                     println!("{:?}", err)
                 }
