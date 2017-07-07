@@ -9,6 +9,6 @@ keywords = ["file", "watcher", "command-line", "trigger"]
 license = "Apache-2.0"
 
 [dependencies]
-clap = "~2.19.0"
+clap = "~2.21.0"
 humantime = "~1.0.0"
 notify = "~3.0.0"
