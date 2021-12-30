@@ -16,9 +16,8 @@ use std::time::Duration;
 
 use std::process::{Command, Stdio};
 
-use traits::Process;
 use error::CommandError;
-
+use traits::Process;
 
 fn env_var_to_tuple(var: &str) -> (String, String) {
     let mut vs = var.split('=');
@@ -26,13 +25,16 @@ fn env_var_to_tuple(var: &str) -> (String, String) {
         return match vs.next() {
             Some(val) => (String::from(name), String::from(val)),
             None => (String::from(name), "".to_string()),
-        }
+        };
     }
     ("".to_string(), "".to_string())
 }
 
 pub fn run_cmd(cmd: &str, env: &Option<Vec<&str>>) -> Result<i32, CommandError> {
-    let args = cmd.split(' ').filter(|s| !s.is_empty()).collect::<Vec<&str>>();
+    let args = cmd
+        .split(' ')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<&str>>();
     if args.len() < 1 {
         return Err(CommandError::new("Empty command string passed in"));
     }
@@ -55,7 +57,7 @@ pub fn run_cmd(cmd: &str, env: &Option<Vec<&str>>) -> Result<i32, CommandError> 
         },
         // TODO(jeremy): We should not swallow this error.
         Err(_) => Err(CommandError::new("Error running command")),
-    }
+    };
 }
 
 fn is_cmd_success(cmd: &str, env: Option<Vec<&str>>) -> bool {
@@ -74,11 +76,13 @@ pub struct ExecProcess<'a> {
 }
 
 impl<'a> ExecProcess<'a> {
-    pub fn new(test_cmd: &'a str,
-               cmd: &'a str,
-               negate: bool,
-               env: Option<Vec<&'a str>>,
-               poll: Duration) -> ExecProcess<'a> {
+    pub fn new(
+        test_cmd: &'a str,
+        cmd: &'a str,
+        negate: bool,
+        env: Option<Vec<&'a str>>,
+        poll: Duration,
+    ) -> ExecProcess<'a> {
         ExecProcess {
             test_cmd: test_cmd,
             negate: negate,

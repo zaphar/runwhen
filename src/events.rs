@@ -13,7 +13,7 @@
 //  limitations under the License.
 use notify::DebouncedEvent;
 
-#[derive(PartialEq,Clone)]
+#[derive(PartialEq, Clone)]
 pub enum WatchEventType {
     Touched,
     Changed,

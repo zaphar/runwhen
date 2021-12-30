@@ -14,9 +14,9 @@
 use std::thread;
 use std::time::Duration;
 
-use traits::Process;
 use error::CommandError;
 use exec::run_cmd;
+use traits::Process;
 
 pub struct TimerProcess<'a> {
     cmd: &'a str,
@@ -26,10 +26,12 @@ pub struct TimerProcess<'a> {
 }
 
 impl<'a> TimerProcess<'a> {
-    pub fn new(cmd: &'a str,
-               env: Option<Vec<&'a str>>,
-               poll_duration: Duration,
-               max_repeat: Option<u32>) -> TimerProcess<'a> {
+    pub fn new(
+        cmd: &'a str,
+        env: Option<Vec<&'a str>>,
+        poll_duration: Duration,
+        max_repeat: Option<u32>,
+    ) -> TimerProcess<'a> {
         TimerProcess {
             cmd: cmd,
             env: env,
