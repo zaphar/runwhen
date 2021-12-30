@@ -11,18 +11,18 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-use std::thread;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use std::path::Path;
 use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
-use notify::{Watcher, RecursiveMode, watcher};
+use notify::{watcher, RecursiveMode, Watcher};
 
-use traits::Process;
 use error::CommandError;
 use events::WatchEventType;
 use exec::run_cmd;
+use traits::Process;
 
 pub struct FileProcess<'a> {
     cmd: &'a str,
@@ -33,12 +33,13 @@ pub struct FileProcess<'a> {
 }
 
 impl<'a> FileProcess<'a> {
-    pub fn new(cmd: &'a str,
-               env: Option<Vec<&'a str>>,
-               file: &'a str,
-               method: WatchEventType,
-               poll: Duration)
-               -> FileProcess<'a> {
+    pub fn new(
+        cmd: &'a str,
+        env: Option<Vec<&'a str>>,
+        file: &'a str,
+        method: WatchEventType,
+        poll: Duration,
+    ) -> FileProcess<'a> {
         FileProcess {
             cmd: cmd,
             env: env,
@@ -49,9 +50,20 @@ impl<'a> FileProcess<'a> {
     }
 }
 
-fn spawn_runner_thread(lock: Arc<Mutex<bool>>, cmd: String,
-                       env: Option<Vec<&str>>, poll: Duration) {
-    let copied_env = env.and_then(|v| Some(v.iter().cloned().map(|s| String::from(s)).collect::<Vec<String>>()));
+fn spawn_runner_thread(
+    lock: Arc<Mutex<bool>>,
+    cmd: String,
+    env: Option<Vec<&str>>,
+    poll: Duration,
+) {
+    let copied_env = env.and_then(|v| {
+        Some(
+            v.iter()
+                .cloned()
+                .map(|s| String::from(s))
+                .collect::<Vec<String>>(),
+        )
+    });
     thread::spawn(move || {
         let copied_env_refs: Option<Vec<&str>> = match copied_env {
             Some(ref vec) => {
@@ -60,7 +72,7 @@ fn spawn_runner_thread(lock: Arc<Mutex<bool>>, cmd: String,
                     refs.push(s);
                 }
                 Some(refs)
-            },
+            }
             None => None,
         };
         loop {
@@ -68,34 +80,37 @@ fn spawn_runner_thread(lock: Arc<Mutex<bool>>, cmd: String,
             thread::sleep(poll);
             // Default to not running the command.
             match lock.lock() {
-                Ok(mut signal) => if *signal {
-                    // set signal to false so we won't trigger on the
-                    // next loop iteration unless we recieved more events.
-                    *signal = false;
-                    // Run our command!
-                    println!("exec: {}", cmd);
-                    if let Err(err) = run_cmd(&cmd, &copied_env_refs) {
-                        println!("{:?}", err)
+                Ok(mut signal) => {
+                    if *signal {
+                        // set signal to false so we won't trigger on the
+                        // next loop iteration unless we recieved more events.
+                        *signal = false;
+                        // Run our command!
+                        println!("exec: {}", cmd);
+                        if let Err(err) = run_cmd(&cmd, &copied_env_refs) {
+                            println!("{:?}", err)
+                        }
                     }
-                },
+                }
                 Err(err) => {
                     println!("Unexpected error; {}", err);
-                    return
+                    return;
                 }
             }
         }
     });
 }
 
-fn wait_for_fs_events(lock: Arc<Mutex<bool>>,
-                      method: WatchEventType,
-                      file: &str)
-                      -> Result<(), CommandError> {
+fn wait_for_fs_events(
+    lock: Arc<Mutex<bool>>,
+    method: WatchEventType,
+    file: &str,
+) -> Result<(), CommandError> {
     // Notify requires a channel for communication.
     let (tx, rx) = channel();
-    let mut watcher = try!(watcher(tx, Duration::from_secs(1)));
+    let mut watcher = watcher(tx, Duration::from_secs(1))?;
     // TODO(jwall): Better error handling.
-    try!(watcher.watch(file, RecursiveMode::Recursive));
+    watcher.watch(file, RecursiveMode::Recursive)?;
     println!("Watching {:?}", file);
     loop {
         let evt: WatchEventType = match rx.recv() {
@@ -115,15 +130,13 @@ fn wait_for_fs_events(lock: Arc<Mutex<bool>>,
                     *signal = true;
                 }
             }
-            WatchEventType::Changed => {
-                match lock.lock() {
-                    Ok(mut signal) => *signal = true,
-                    Err(err) => {
-                        println!("Unexpected error; {}", err);
-                        return Ok(())
-                    }
+            WatchEventType::Changed => match lock.lock() {
+                Ok(mut signal) => *signal = true,
+                Err(err) => {
+                    println!("Unexpected error; {}", err);
+                    return Ok(());
                 }
-            }
+            },
         }
     }
 }
@@ -133,12 +146,19 @@ impl<'a> Process for FileProcess<'a> {
         // NOTE(jwall): this is necessary because notify::fsEventWatcher panics
         // if the path doesn't exist. :-(
         if !Path::new(self.file).exists() {
-            return Err(CommandError::new(format!("No such path! {0}", self.file).to_string()));
+            return Err(CommandError::new(
+                format!("No such path! {0}", self.file).to_string(),
+            ));
         }
         // TODO(jeremy): Is this sufficent or do we want to ignore
         // any events that come in while the command is running?
         let lock = Arc::new(Mutex::new(false));
-        spawn_runner_thread(lock.clone(), self.cmd.to_string(), self.env.clone(), self.poll);
+        spawn_runner_thread(
+            lock.clone(),
+            self.cmd.to_string(),
+            self.env.clone(),
+            self.poll,
+        );
         wait_for_fs_events(lock, self.method.clone(), self.file)
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "runwhen"
-version = "0.0.3"
+version = "0.0.4"
 authors = ["Jeremy Wall <jeremy@marzhillstudios.com>"]
 description = "Runs a command on user specified triggers."
 repository = "https://github.com/zaphar/runwhen"
@@ -9,6 +9,6 @@ keywords = ["file", "watcher", "command-line", "trigger"]
 license = "Apache-2.0"
 
 [dependencies]
-clap = "~2.19.0"
+clap = "~2.34"
 humantime = "~1.0.0"
 notify = "~3.0.0"

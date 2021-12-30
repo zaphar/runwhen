@@ -20,18 +20,18 @@ extern crate notify;
 use std::process;
 use std::str::FromStr;
 
-mod traits;
-mod file;
-mod timer;
 mod error;
 mod events;
 mod exec;
+mod file;
+mod timer;
+mod traits;
 
-use traits::Process;
+use events::WatchEventType;
+use exec::ExecProcess;
 use file::FileProcess;
 use timer::TimerProcess;
-use exec::ExecProcess;
-use events::WatchEventType;
+use traits::Process;
 
 fn do_flags<'a>() -> clap::ArgMatches<'a> {
     clap_app!(
@@ -68,7 +68,7 @@ fn do_flags<'a>() -> clap::ArgMatches<'a> {
               "How frequently to test command (default 5s)")
             )
     )
-        .get_matches()
+    .get_matches()
 }
 
 fn main() {
@@ -83,7 +83,7 @@ fn main() {
         }
         maybe_env = Some(env_vec);
     }
-    let mut process: Option<Box<Process>> = None;
+    let mut process: Option<Box<dyn Process>> = None;
     if let Some(matches) = app.subcommand_matches("watch") {
         // Unwrap because this flag is required.
         let file = matches.value_of("file").unwrap_or(".");
@@ -94,11 +94,15 @@ fn main() {
         let poll = matches.value_of("poll").unwrap_or("5s");
         let dur = humantime::parse_duration(poll).expect("Invalid poll value.");
         process = Some(Box::new(FileProcess::new(
-            cmd, maybe_env, file, method, dur)));
+            cmd, maybe_env, file, method, dur,
+        )));
     } else if let Some(matches) = app.subcommand_matches("timer") {
         // Unwrap because this flag is required.
-        let dur = humantime::parse_duration(matches.value_of("duration")
-            .expect("duration flag is required"));
+        let dur = humantime::parse_duration(
+            matches
+                .value_of("duration")
+                .expect("duration flag is required"),
+        );
         match dur {
             Ok(duration) => {
                 let max_repeat = if let Some(val) = matches.value_of("repeat") {
@@ -114,7 +118,8 @@ fn main() {
                     None
                 };
                 process = Some(Box::new(TimerProcess::new(
-                    cmd, maybe_env, duration, max_repeat)));
+                    cmd, maybe_env, duration, max_repeat,
+                )));
             }
             Err(msg) => {
                 println!("Malformed duration {:?}", msg);
@@ -127,7 +132,9 @@ fn main() {
         let negate = matches.is_present("not");
         let dur = humantime::parse_duration(matches.value_of("poll").unwrap_or("5s"));
         process = match dur {
-            Ok(duration) => Some(Box::new(ExecProcess::new(ifcmd, cmd, negate, maybe_env, duration))),
+            Ok(duration) => Some(Box::new(ExecProcess::new(
+                ifcmd, cmd, negate, maybe_env, duration,
+            ))),
             Err(msg) => {
                 println!("Malformed poll {:?}", msg);
                 process::exit(1)
@@ -135,15 +142,13 @@ fn main() {
         }
     }
     match process {
-        Some(process) => {
-            match process.run() {
-                Ok(_) => return,
-                Err(err) => {
-                    println!("{0}", err);
-                    process::exit(1)
-                }
+        Some(process) => match process.run() {
+            Ok(_) => return,
+            Err(err) => {
+                println!("{0}", err);
+                process::exit(1)
             }
-        }
+        },
         None => {
             println!("You must specify a subcommand.");
             process::exit(1)

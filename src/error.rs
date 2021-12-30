@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-use std::error::Error;
 use std::fmt;
 
 use notify;
@@ -35,6 +34,6 @@ impl fmt::Display for CommandError {
 
 impl From<notify::Error> for CommandError {
     fn from(e: notify::Error) -> CommandError {
-        CommandError::new(e.description().to_string())
+        CommandError::new(format!("{}", e))
     }
 }
