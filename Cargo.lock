@@ -248,7 +248,7 @@ checksum = "41cc0f7e4d5d4544e8861606a285bb08d3e70712ccc7d2b84d7c0ccfaf4b05ce"
 
 [[package]]
 name = "runwhen"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "clap",
  "humantime",
