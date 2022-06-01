@@ -27,7 +27,7 @@ use traits::Process;
 pub struct FileProcess<'a> {
     cmd: &'a str,
     env: Option<Vec<&'a str>>,
-    file: &'a str,
+    files: Vec<&'a str>,
     method: WatchEventType,
     poll: Duration,
 }
@@ -36,14 +36,14 @@ impl<'a> FileProcess<'a> {
     pub fn new(
         cmd: &'a str,
         env: Option<Vec<&'a str>>,
-        file: &'a str,
+        file: Vec<&'a str>,
         method: WatchEventType,
         poll: Duration,
     ) -> FileProcess<'a> {
         FileProcess {
             cmd: cmd,
             env: env,
-            file: file,
+            files: file,
             method: method,
             poll: poll,
         }
@@ -104,14 +104,23 @@ fn spawn_runner_thread(
 fn wait_for_fs_events(
     lock: Arc<Mutex<bool>>,
     method: WatchEventType,
-    file: &str,
+    files: &Vec<&str>,
 ) -> Result<(), CommandError> {
     // Notify requires a channel for communication.
     let (tx, rx) = channel();
     let mut watcher = watcher(tx, Duration::from_secs(1))?;
     // TODO(jwall): Better error handling.
-    watcher.watch(file, RecursiveMode::Recursive)?;
-    println!("Watching {:?}", file);
+    for file in files {
+        // NOTE(jwall): this is necessary because notify::fsEventWatcher panics
+        // if the path doesn't exist. :-(
+        if !Path::new(*file).exists() {
+            return Err(CommandError::new(
+                format!("No such path! {0}", *file).to_string(),
+            ));
+        }
+        watcher.watch(*file, RecursiveMode::Recursive)?;
+        println!("Watching {:?}", *file);
+    }
     loop {
         let evt: WatchEventType = match rx.recv() {
             Ok(event) => WatchEventType::from(event),
@@ -128,6 +137,8 @@ fn wait_for_fs_events(
                 if method == WatchEventType::Touched {
                     let mut signal = lock.lock().unwrap();
                     *signal = true;
+                } else {
+                    println!("Ignoring touched event");
                 }
             }
             WatchEventType::Changed => match lock.lock() {
@@ -143,13 +154,6 @@ fn wait_for_fs_events(
 
 impl<'a> Process for FileProcess<'a> {
     fn run(&self) -> Result<(), CommandError> {
-        // NOTE(jwall): this is necessary because notify::fsEventWatcher panics
-        // if the path doesn't exist. :-(
-        if !Path::new(self.file).exists() {
-            return Err(CommandError::new(
-                format!("No such path! {0}", self.file).to_string(),
-            ));
-        }
         // TODO(jeremy): Is this sufficent or do we want to ignore
         // any events that come in while the command is running?
         let lock = Arc::new(Mutex::new(false));
@@ -159,6 +163,6 @@ impl<'a> Process for FileProcess<'a> {
             self.env.clone(),
             self.poll,
         );
-        wait_for_fs_events(lock, self.method.clone(), self.file)
+        wait_for_fs_events(lock, self.method.clone(), &self.files)
     }
 }

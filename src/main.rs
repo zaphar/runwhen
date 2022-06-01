@@ -40,11 +40,11 @@ fn do_flags<'a>() -> clap::ArgMatches<'a> {
             (author: crate_authors!())
             (about: "Runs a command on user defined triggers.")
             (@arg cmd: -c --cmd +required +takes_value "Command to run on supplied triggers")
-            (@arg env: -e --env +takes_value ... "Command to run on supplied triggers")
+            (@arg env: -e --env +takes_value ... "Env variables to set for the command")
             (@subcommand watch =>
              (about: "Trigger that fires when a file or directory changes.")
              // TODO(jeremy): We need to support filters
-             (@arg file: -f --file +takes_value
+             (@arg file: -f --file +takes_value ...
               "File/Directory to watch. (default current working directory)")
              (@arg filetouch: --touch
               "Watches for attribute modifications as well as content changes.")
@@ -85,8 +85,11 @@ fn main() {
     }
     let mut process: Option<Box<dyn Process>> = None;
     if let Some(matches) = app.subcommand_matches("watch") {
-        // Unwrap because this flag is required.
-        let file = matches.value_of("file").unwrap_or(".");
+        let file = match matches.values_of("file") {
+            Some(v) => v.collect(),
+            // The default is our current directory
+            None => vec!["."],
+        };
         let mut method = WatchEventType::Changed;
         if matches.is_present("filetouch") {
             method = WatchEventType::Touched;
