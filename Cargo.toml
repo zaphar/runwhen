@@ -11,4 +11,4 @@ license = "Apache-2.0"
 [dependencies]
 clap = "~2.34"
 humantime = "~1.0.0"
-notify = "~3.0.0"
+notify = "4.0.17"
