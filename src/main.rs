@@ -17,8 +17,7 @@ extern crate clap;
 extern crate humantime;
 extern crate notify;
 
-use std::process;
-use std::str::FromStr;
+use std::{path::PathBuf, process, str::FromStr};
 
 mod error;
 mod events;
@@ -33,42 +32,36 @@ use file::FileProcess;
 use timer::TimerProcess;
 use traits::Process;
 
-fn do_flags<'a>() -> clap::ArgMatches<'a> {
-    clap_app!(
-        runwhen =>
-            (version: crate_version!())
-            (author: crate_authors!())
-            (about: "Runs a command on user defined triggers.")
-            (@arg cmd: -c --cmd +required +takes_value "Command to run on supplied triggers")
-            (@arg env: -e --env +takes_value ... "Env variables to set for the command")
-            (@subcommand watch =>
-             (about: "Trigger that fires when a file or directory changes.")
-             // TODO(jeremy): We need to support filters
-             (@arg file: -f --file +takes_value ...
-              "File/Directory to watch. (default current working directory)")
-             (@arg filetouch: --touch
-              "Watches for attribute modifications as well as content changes.")
-             (@arg wait: --poll +takes_value
-              "How frequently to poll for events (default 5s)")
-            )
-            (@subcommand timer =>
-             (about: "Trigger that fires on a timer.")
-             (@arg duration: -t --duration +required +takes_value
-              "Defines timer frequency.")
-             (@arg repeat: -n --repeat +takes_value
-              "Defines an optional max number times to run on repeat.")
-            )
-            (@subcommand success =>
-             (about: "Trigger that fires if a command runs successful.")
-             (@arg ifcmd: --if +required +takes_value
-              "The command to test for successful exit from")
-             (@arg not: --not
-              "Negate the test command so we run on failure instead of success.")
-             (@arg wait: --poll +takes_value
-              "How frequently to test command (default 5s)")
-            )
-    )
-    .get_matches()
+#[rustfmt::skip]
+fn do_flags() -> clap::ArgMatches {
+    clap::command!()
+        .version(crate_version!())
+        .author(crate_authors!())
+        .about("Runs a command on user defined triggers.")
+        .arg(arg!(-c --cmd).takes_value(true).help("The command to run on the trigger"))
+        .arg(arg!(-e --env ...).takes_value(true).help("Set of environment variables to set for the command"))
+        .subcommand(
+            clap::Command::new("watch")
+                .about("Trigger that fires when a file or directory changes.")
+                .arg(
+                    arg!(-f --file)
+                        .name("filetouch")
+                        .value_parser(value_parser!(PathBuf)).help("File or directory to watch for changes"),
+                )
+                .arg(arg!(--touch).help("Use file or directory timestamps to monitor for changes."))
+            .arg(arg!(--poll).value_parser(value_parser!(humantime::Duration)).help("Duration of time between polls")))
+        .subcommand(
+            clap::Command::new("timer")
+                .about("Run command on a timer")
+                .arg(arg!(-t --duration).takes_value(true).value_parser(value_parser!(humantime::Duration)).help("Duration between runs"))
+                .arg(arg!(-n --repeat).value_parser(value_parser!(u32))).about("Number of times to run before finishing"))
+        .subcommand(
+            clap::Command::new("success")
+            .about("Run a command when a test command succeeds")
+            .arg(arg!(--if).value_parser(value_parser!(String)).help("The command to run and check for success on"))
+            .arg(arg!(--not).help("Negate the success of the command"))
+            .arg(arg!(--poll).value_parser(value_parser!(humantime::Duration)).help("Duration of time between poll")))
+        .get_matches()
 }
 
 fn main() {
@@ -94,55 +87,34 @@ fn main() {
         if matches.is_present("filetouch") {
             method = WatchEventType::Touched;
         }
-        let poll = matches.value_of("poll").unwrap_or("5s");
-        let dur = humantime::parse_duration(poll).expect("Invalid poll value.");
+        let duration = *matches
+            .get_one::<humantime::Duration>("poll")
+            .cloned()
+            .unwrap_or(humantime::Duration::from_str("5s").unwrap());
         process = Some(Box::new(FileProcess::new(
-            cmd, maybe_env, file, method, dur,
+            cmd, maybe_env, file, method, duration,
         )));
     } else if let Some(matches) = app.subcommand_matches("timer") {
         // Unwrap because this flag is required.
-        let dur = humantime::parse_duration(
-            matches
-                .value_of("duration")
-                .expect("duration flag is required"),
-        );
-        match dur {
-            Ok(duration) => {
-                let max_repeat = if let Some(val) = matches.value_of("repeat") {
-                    match u32::from_str(val) {
-                        Ok(n) => Some(n),
-                        Err(e) => {
-                            println!("Invalid --repeat value {}", e);
-                            println!("{}", matches.usage());
-                            process::exit(1)
-                        }
-                    }
-                } else {
-                    None
-                };
-                process = Some(Box::new(TimerProcess::new(
-                    cmd, maybe_env, duration, max_repeat,
-                )));
-            }
-            Err(msg) => {
-                println!("Malformed duration {:?}", msg);
-                process::exit(1);
-            }
-        }
+        let duration = matches
+            .get_one::<humantime::Duration>("duration")
+            .expect("duration flag is required")
+            .clone();
+        let max_repeat = matches.get_one::<u32>("repeat").cloned();
+        process = Some(Box::new(TimerProcess::new(
+            cmd, maybe_env, *duration, max_repeat,
+        )));
     } else if let Some(matches) = app.subcommand_matches("success") {
         // unwrap because this is required.
         let ifcmd = matches.value_of("ifcmd").expect("ifcmd flag is required");
         let negate = matches.is_present("not");
-        let dur = humantime::parse_duration(matches.value_of("poll").unwrap_or("5s"));
-        process = match dur {
-            Ok(duration) => Some(Box::new(ExecProcess::new(
-                ifcmd, cmd, negate, maybe_env, duration,
-            ))),
-            Err(msg) => {
-                println!("Malformed poll {:?}", msg);
-                process::exit(1)
-            }
-        }
+        let duration = *matches
+            .get_one::<humantime::Duration>("poll")
+            .cloned()
+            .unwrap_or(humantime::Duration::from_str("5s").unwrap());
+        Some(Box::new(ExecProcess::new(
+            ifcmd, cmd, negate, maybe_env, duration,
+        )));
     }
     match process {
         Some(process) => match process.run() {
