@@ -14,5 +14,5 @@
 use error::CommandError;
 
 pub trait Process {
-    fn run(&self) -> Result<(), CommandError>;
+    fn run(&mut self) -> Result<(), CommandError>;
 }

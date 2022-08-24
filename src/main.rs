@@ -72,12 +72,11 @@ fn main() {
     if let Some(env_values) = app.values_of("env") {
         let mut env_vec = Vec::new();
         for v in env_values {
-            env_vec.push(v);
+            env_vec.push(v.to_string());
         }
         maybe_env = Some(env_vec);
     }
-    let mut process: Option<Box<dyn Process>> = None;
-    if let Some(matches) = app.subcommand_matches("watch") {
+    let mut proc: Box<dyn Process> = if let Some(matches) = app.subcommand_matches("watch") {
         let file = match matches.values_of("file") {
             Some(v) => v.collect(),
             // The default is our current directory
@@ -91,19 +90,16 @@ fn main() {
             .get_one::<humantime::Duration>("poll")
             .cloned()
             .unwrap_or(humantime::Duration::from_str("5s").unwrap());
-        process = Some(Box::new(FileProcess::new(
-            cmd, maybe_env, file, method, duration,
-        )));
+        Box::new(FileProcess::new(cmd, maybe_env, file, method, duration))
     } else if let Some(matches) = app.subcommand_matches("timer") {
+        // TODO(jwall): This should use cancelable commands.
         // Unwrap because this flag is required.
         let duration = matches
             .get_one::<humantime::Duration>("duration")
             .expect("duration flag is required")
             .clone();
         let max_repeat = matches.get_one::<u32>("repeat").cloned();
-        process = Some(Box::new(TimerProcess::new(
-            cmd, maybe_env, *duration, max_repeat,
-        )));
+        Box::new(TimerProcess::new(cmd, maybe_env, *duration, max_repeat))
     } else if let Some(matches) = app.subcommand_matches("success") {
         // unwrap because this is required.
         let ifcmd = matches.value_of("ifcmd").expect("ifcmd flag is required");
@@ -112,20 +108,15 @@ fn main() {
             .get_one::<humantime::Duration>("poll")
             .cloned()
             .unwrap_or(humantime::Duration::from_str("5s").unwrap());
-        Some(Box::new(ExecProcess::new(
-            ifcmd, cmd, negate, maybe_env, duration,
-        )));
-    }
-    match process {
-        Some(process) => match process.run() {
-            Ok(_) => return,
-            Err(err) => {
-                println!("{0}", err);
-                process::exit(1)
-            }
-        },
-        None => {
-            println!("You must specify a subcommand.");
+        Box::new(ExecProcess::new(ifcmd, cmd, negate, maybe_env, duration))
+    } else {
+        println!("You must specify a subcommand.");
+        process::exit(1)
+    };
+    match proc.run() {
+        Ok(_) => return,
+        Err(err) => {
+            println!("{0}", err);
             process::exit(1)
         }
     }

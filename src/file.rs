@@ -21,12 +21,12 @@ use notify::{watcher, RecursiveMode, Watcher};
 
 use error::CommandError;
 use events::WatchEventType;
-use exec::run_cmd;
+use exec::CancelableProcess;
 use traits::Process;
 
 pub struct FileProcess<'a> {
     cmd: &'a str,
-    env: Option<Vec<&'a str>>,
+    env: Option<Vec<String>>,
     files: Vec<&'a str>,
     method: WatchEventType,
     poll: Duration,
@@ -35,17 +35,17 @@ pub struct FileProcess<'a> {
 impl<'a> FileProcess<'a> {
     pub fn new(
         cmd: &'a str,
-        env: Option<Vec<&'a str>>,
+        env: Option<Vec<String>>,
         file: Vec<&'a str>,
         method: WatchEventType,
         poll: Duration,
     ) -> FileProcess<'a> {
         FileProcess {
-            cmd: cmd,
-            env: env,
+            cmd,
+            env,
+            method,
+            poll,
             files: file,
-            method: method,
-            poll: poll,
         }
     }
 }
@@ -53,7 +53,7 @@ impl<'a> FileProcess<'a> {
 fn spawn_runner_thread(
     lock: Arc<Mutex<bool>>,
     cmd: String,
-    env: Option<Vec<&str>>,
+    env: Option<Vec<String>>,
     poll: Duration,
 ) {
     let copied_env = env.and_then(|v| {
@@ -65,40 +65,44 @@ fn spawn_runner_thread(
         )
     });
     thread::spawn(move || {
-        let copied_env_refs: Option<Vec<&str>> = match copied_env {
-            Some(ref vec) => {
-                let mut refs: Vec<&str> = Vec::new();
-                for s in vec.iter() {
-                    refs.push(s);
-                }
-                Some(refs)
-            }
-            None => None,
-        };
+        let mut exec = CancelableProcess::new(&cmd, copied_env);
+        exec.spawn().expect("Failed to start command");
         loop {
             // Wait our requisit number of seconds
             thread::sleep(poll);
             // Default to not running the command.
-            match lock.lock() {
-                Ok(mut signal) => {
-                    if *signal {
-                        // set signal to false so we won't trigger on the
-                        // next loop iteration unless we recieved more events.
-                        *signal = false;
-                        // Run our command!
-                        println!("exec: {}", cmd);
-                        if let Err(err) = run_cmd(&cmd, &copied_env_refs) {
-                            println!("{:?}", err)
-                        }
-                    }
-                }
-                Err(err) => {
-                    println!("Unexpected error; {}", err);
-                    return;
-                }
+            if !run_loop_step(lock.clone(), &mut exec) {
+                exec.reset().expect("Failed to start command");
             }
         }
     });
+}
+
+fn run_loop_step(lock: Arc<Mutex<bool>>, exec: &mut CancelableProcess) -> bool {
+    match lock.lock() {
+        Ok(mut signal) => {
+            // We always want to check on our process each iteration of the loop.
+            if let Err(err) = exec.check() {
+                println!("{:?}", err);
+                return false;
+            }
+            if *signal {
+                // set signal to false so we won't trigger on the
+                // next loop iteration unless we recieved more events.
+                *signal = false;
+                // On a true signal we want to start or restart our process.
+                if let Err(err) = exec.reset() {
+                    println!("{:?}", err);
+                    return false;
+                }
+            }
+            return true;
+        }
+        Err(err) => {
+            println!("Unexpected error; {}", err);
+            return false;
+        }
+    }
 }
 
 fn wait_for_fs_events(
@@ -153,7 +157,7 @@ fn wait_for_fs_events(
 }
 
 impl<'a> Process for FileProcess<'a> {
-    fn run(&self) -> Result<(), CommandError> {
+    fn run(&mut self) -> Result<(), CommandError> {
         // TODO(jeremy): Is this sufficent or do we want to ignore
         // any events that come in while the command is running?
         let lock = Arc::new(Mutex::new(false));

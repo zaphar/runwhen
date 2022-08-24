@@ -14,41 +14,40 @@
 use std::thread;
 use std::time::Duration;
 
+use exec::CancelableProcess;
 use error::CommandError;
-use exec::run_cmd;
 use traits::Process;
 
-pub struct TimerProcess<'a> {
-    cmd: &'a str,
-    env: Option<Vec<&'a str>>,
+pub struct TimerProcess {
+    cmd: CancelableProcess,
     poll_duration: Duration,
     max_repeat: Option<u32>,
 }
 
-impl<'a> TimerProcess<'a> {
+impl TimerProcess {
     pub fn new(
-        cmd: &'a str,
-        env: Option<Vec<&'a str>>,
+        cmd: &str,
+        env: Option<Vec<String>>,
         poll_duration: Duration,
         max_repeat: Option<u32>,
-    ) -> TimerProcess<'a> {
+    ) -> TimerProcess {
+    let cmd = CancelableProcess::new(cmd, env);
         TimerProcess {
-            cmd: cmd,
-            env: env,
-            poll_duration: poll_duration,
-            max_repeat: max_repeat,
+            cmd,
+            poll_duration,
+            max_repeat,
         }
     }
 }
 
-impl<'a> Process for TimerProcess<'a> {
-    fn run(&self) -> Result<(), CommandError> {
+impl Process for TimerProcess {
+    fn run(&mut self) -> Result<(), CommandError> {
         let mut counter = 0;
         loop {
             if self.max_repeat.is_some() && counter >= self.max_repeat.unwrap() {
                 return Ok(());
             }
-            if let Err(err) = run_cmd(self.cmd, &self.env) {
+            if let Err(err) = self.cmd.block() {
                 println!("{:?}", err)
             }
             thread::sleep(self.poll_duration);

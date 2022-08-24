@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 use std::fmt;
+use std::io;
 
 use notify;
 
@@ -35,5 +36,11 @@ impl fmt::Display for CommandError {
 impl From<notify::Error> for CommandError {
     fn from(e: notify::Error) -> CommandError {
         CommandError::new(format!("{}", e))
+    }
+}
+
+impl From<io::Error> for CommandError {
+    fn from(e: io::Error) -> CommandError {
+        CommandError::new(format!("IO: {}", e))
     }
 }
