@@ -45,10 +45,9 @@ fn do_flags() -> clap::ArgMatches {
                 .about("Trigger that fires when a file or directory changes.")
                 .arg(
                     arg!(-f --file)
-                        .name("filetouch")
-                        .value_parser(value_parser!(PathBuf)).help("File or directory to watch for changes"),
+                        .takes_value(true).value_parser(value_parser!(PathBuf)).help("File or directory to watch for changes"),
                 )
-                .arg(arg!(--touch).help("Use file or directory timestamps to monitor for changes."))
+                .arg(arg!(--touch).name("filetouch").help("Use file or directory timestamps to monitor for changes."))
             .arg(arg!(--poll).value_parser(value_parser!(humantime::Duration)).help("Duration of time between polls")))
         .subcommand(
             clap::Command::new("timer")
