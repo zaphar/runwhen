@@ -12,8 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 use std::path::Path;
-use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 
@@ -29,7 +28,7 @@ pub struct FileProcess<'a> {
     env: Option<Vec<String>>,
     files: Vec<&'a str>,
     method: WatchEventType,
-    poll: Duration,
+    poll: Option<Duration>,
 }
 
 impl<'a> FileProcess<'a> {
@@ -38,7 +37,7 @@ impl<'a> FileProcess<'a> {
         env: Option<Vec<String>>,
         file: Vec<&'a str>,
         method: WatchEventType,
-        poll: Duration,
+        poll: Option<Duration>,
     ) -> FileProcess<'a> {
         FileProcess {
             cmd,
@@ -50,11 +49,11 @@ impl<'a> FileProcess<'a> {
     }
 }
 
-fn spawn_runner_thread(
-    lock: Arc<Mutex<bool>>,
+fn watch_for_change_events(
+    ch: Receiver<()>,
     cmd: String,
     env: Option<Vec<String>>,
-    poll: Duration,
+    poll: Option<Duration>,
 ) {
     let copied_env = env.and_then(|v| {
         Some(
@@ -64,56 +63,48 @@ fn spawn_runner_thread(
                 .collect::<Vec<String>>(),
         )
     });
-    thread::spawn(move || {
-        let mut exec = CancelableProcess::new(&cmd, copied_env);
-        exec.spawn().expect("Failed to start command");
-        loop {
-            // Wait our requisit number of seconds
-            thread::sleep(poll);
-            // Default to not running the command.
-            if !run_loop_step(lock.clone(), &mut exec) {
-                exec.reset().expect("Failed to start command");
-            }
+    let mut exec = CancelableProcess::new(&cmd, copied_env);
+    println!("Spawning command");
+    exec.spawn().expect("Failed to start command");
+    println!("Starting watch loop");
+    loop {
+        // Wait our requisit number of seconds
+        if let Some(poll) = poll {
+            thread::sleep(dbg!(poll));
         }
-    });
-}
-
-fn run_loop_step(lock: Arc<Mutex<bool>>, exec: &mut CancelableProcess) -> bool {
-    match lock.lock() {
-        Ok(mut signal) => {
-            // We always want to check on our process each iteration of the loop.
-            if let Err(err) = exec.check() {
-                println!("{:?}", err);
-                return false;
-            }
-            if *signal {
-                // set signal to false so we won't trigger on the
-                // next loop iteration unless we recieved more events.
-                *signal = false;
-                // On a true signal we want to start or restart our process.
-                if let Err(err) = exec.reset() {
-                    println!("{:?}", err);
-                    return false;
-                }
-            }
-            return true;
-        }
-        Err(err) => {
-            println!("Unexpected error; {}", err);
-            return false;
+        //if let Err(err) = exec.check() {
+        //    println!("Error running command! {}", err);
+        //    println!("Continuing");
+        //};
+        // Default to not running the command.
+        if !run_loop_step(&ch, &mut exec) {
+            println!("Failed to start command");
         }
     }
 }
 
+fn run_loop_step(ch: &Receiver<()>, exec: &mut CancelableProcess) -> bool {
+    let _ = ch.recv().unwrap();
+    // We always want to check on our process each iteration of the loop.
+    // set signal to false so we won't trigger on the
+    // next loop iteration unless we recieved more events.
+    // On a true signal we want to start or restart our process.
+    println!("Restarting process");
+    if let Err(err) = exec.reset() {
+        println!("{:?}", err);
+        return false;
+    }
+    return true;
+}
+
 fn wait_for_fs_events(
-    lock: Arc<Mutex<bool>>,
+    ch: Sender<()>,
     method: WatchEventType,
     files: &Vec<&str>,
 ) -> Result<(), CommandError> {
     // Notify requires a channel for communication.
     let (tx, rx) = channel();
     let mut watcher = watcher(tx, Duration::from_secs(1))?;
-    // TODO(jwall): Better error handling.
     for file in files {
         // NOTE(jwall): this is necessary because notify::fsEventWatcher panics
         // if the path doesn't exist. :-(
@@ -128,30 +119,24 @@ fn wait_for_fs_events(
     loop {
         let evt: WatchEventType = match rx.recv() {
             Ok(event) => WatchEventType::from(event),
-            Err(_) => WatchEventType::Error,
+            Err(e) => {
+                println!("Watch Error: {}", e);
+                WatchEventType::Error
+            }
         };
         match evt {
-            WatchEventType::Ignore => {
-                // We ignore this one.
-            }
-            WatchEventType::Error => {
-                // We log this one.
+            WatchEventType::Ignore | WatchEventType::Error => {
+                // We ignore these.
+                //println!("Event: Ignore");
             }
             WatchEventType::Touched => {
                 if method == WatchEventType::Touched {
-                    let mut signal = lock.lock().unwrap();
-                    *signal = true;
-                } else {
-                    println!("Ignoring touched event");
+                    ch.send(()).unwrap();
                 }
             }
-            WatchEventType::Changed => match lock.lock() {
-                Ok(mut signal) => *signal = true,
-                Err(err) => {
-                    println!("Unexpected error; {}", err);
-                    return Ok(());
-                }
-            },
+            WatchEventType::Changed => {
+                ch.send(()).unwrap();
+            }
         }
     }
 }
@@ -160,13 +145,16 @@ impl<'a> Process for FileProcess<'a> {
     fn run(&mut self) -> Result<(), CommandError> {
         // TODO(jeremy): Is this sufficent or do we want to ignore
         // any events that come in while the command is running?
-        let lock = Arc::new(Mutex::new(false));
-        spawn_runner_thread(
-            lock.clone(),
-            self.cmd.to_string(),
-            self.env.clone(),
-            self.poll,
-        );
-        wait_for_fs_events(lock, self.method.clone(), &self.files)
+        let (tx, rx) = channel();
+        thread::spawn({
+            let cmd = self.cmd.to_string();
+            let env = self.env.clone();
+            let poll = self.poll.clone();
+            move || {
+                watch_for_change_events(rx, cmd, env, poll);
+            }
+        });
+        wait_for_fs_events(tx, self.method.clone(), &self.files)?;
+        Ok(())
     }
 }

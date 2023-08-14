@@ -17,7 +17,7 @@ extern crate clap;
 extern crate humantime;
 extern crate notify;
 
-use std::{path::PathBuf, process, str::FromStr};
+use std::{process, str::FromStr};
 
 mod error;
 mod events;
@@ -44,8 +44,8 @@ fn do_flags() -> clap::ArgMatches {
             clap::Command::new("watch")
                 .about("Trigger that fires when a file or directory changes.")
                 .arg(
-                    arg!(-f --file)
-                        .takes_value(true).value_parser(value_parser!(PathBuf)).help("File or directory to watch for changes"),
+                    arg!(-f --file).name("file")
+                        .takes_value(true).help("File or directory to watch for changes"),
                 )
                 .arg(arg!(--touch).name("filetouch").help("Use file or directory timestamps to monitor for changes."))
             .arg(arg!(--poll).value_parser(value_parser!(humantime::Duration)).help("Duration of time between polls")))
@@ -75,6 +75,7 @@ fn main() {
         }
         maybe_env = Some(env_vec);
     }
+    
     let mut proc: Box<dyn Process> = if let Some(matches) = app.subcommand_matches("watch") {
         let file = match matches.values_of("file") {
             Some(v) => v.collect(),
@@ -85,10 +86,10 @@ fn main() {
         if matches.is_present("filetouch") {
             method = WatchEventType::Touched;
         }
-        let duration = *matches
-            .get_one::<humantime::Duration>("poll")
-            .cloned()
-            .unwrap_or(humantime::Duration::from_str("5s").unwrap());
+        let duration = match matches.get_one::<humantime::Duration>("poll") {
+            Some(d) => Some((*d).into()),
+            None => None,
+        };
         Box::new(FileProcess::new(cmd, maybe_env, file, method, duration))
     } else if let Some(matches) = app.subcommand_matches("timer") {
         // TODO(jwall): This should use cancelable commands.

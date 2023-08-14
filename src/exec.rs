@@ -97,6 +97,7 @@ impl CancelableProcess {
 
     pub fn check(&mut self) -> Result<Option<i32>, CommandError> {
         Ok(match self.handle {
+            // TODO(jwall): This appears to block the thread despite the documenation. Figure out if this is fixable or not.
             Some(ref mut h) => match h.try_wait()? {
                 Some(status) => Some(status.code().unwrap_or(0)),
                 None => Some(h.wait()?.code().unwrap_or(0)),
@@ -115,8 +116,9 @@ impl CancelableProcess {
 
     pub fn cancel(&mut self) -> Result<(), CommandError> {
         if let Some(ref mut h) = self.handle {
-            h.kill()?;
+            let _ = h.kill();
         }
+
         self.exec = None;
         self.handle = None;
         Ok(())
