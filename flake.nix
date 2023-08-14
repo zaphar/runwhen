@@ -26,7 +26,7 @@
         defaultPackage = with pkgs;
             naersk-lib.buildPackage rec {
                 pname = "runwhen";
-                version = "0.0.4";
+                version = "0.0.6";
                 src = ./.;
                 cargoBuildOptions = opts: opts ++ ["-p" "${pname}" ];
             };
