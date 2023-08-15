@@ -95,6 +95,8 @@ impl CancelableProcess {
         }
     }
 
+    // NOTE(jwall): We want to actually use this some time when we figure out if it can be made to not block or not.
+    #[allow(dead_code)]
     pub fn check(&mut self) -> Result<Option<i32>, CommandError> {
         Ok(match self.handle {
             // TODO(jwall): This appears to block the thread despite the documenation. Figure out if this is fixable or not.
