@@ -19,7 +19,7 @@
         inherit flake-compat;
         defaultPackage = naersk-lib.buildPackage rec {
                 pname = "runwhen";
-                version = "0.0.6";
+                version = "0.0.8";
                 src = ./.;
                 cargoBuildOptions = opts: opts ++ ["-p" "${pname}" ];
             };
