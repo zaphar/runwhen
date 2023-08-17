@@ -48,7 +48,7 @@ fn do_flags() -> clap::ArgMatches {
                         .takes_value(true).help("File or directory to watch for changes"),
                 )
                 .arg(arg!(--touch).name("filetouch").help("Use file or directory timestamps to monitor for changes."))
-            .arg(arg!(--poll).value_parser(value_parser!(humantime::Duration)).help("Duration of time between polls")))
+            .arg(arg!(--poll).name("poll").takes_value(true).value_parser(value_parser!(humantime::Duration)).help("Duration of time between polls")))
         .subcommand(
             clap::Command::new("timer")
                 .about("Run command on a timer")
@@ -90,6 +90,7 @@ fn main() {
             Some(d) => Some((*d).into()),
             None => None,
         };
+        println!("Enforcing a poll time of {:?}", duration);
         Box::new(FileProcess::new(cmd, maybe_env, file, method, duration))
     } else if let Some(matches) = app.subcommand_matches("timer") {
         // TODO(jwall): This should use cancelable commands.

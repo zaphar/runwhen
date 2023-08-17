@@ -14,7 +14,7 @@
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use notify::{watcher, RecursiveMode, Watcher};
 
@@ -67,24 +67,45 @@ fn watch_for_change_events(
     println!("Spawning command");
     exec.spawn().expect("Failed to start command");
     println!("Starting watch loop");
+    let mut poll_time = Instant::now();
+    let mut changed = false;
+    println!("Waiting for first change event");
+    let _ = ch.recv().expect("Channel was closed!!!");
     loop {
         // Wait our requisit number of seconds
         if let Some(poll) = poll {
-            thread::sleep(dbg!(poll));
+            println!("We have a poll time {:?}", poll);
+            // If our time has passed and the value has changed then run our step immediately
+            if changed && Instant::now().duration_since(poll_time) >= poll {
+                println!(
+                    "Recieved changed event and waited: {:?}",
+                    Instant::now().duration_since(poll_time)
+                );
+                if !run_loop_step(&mut exec) {
+                    println!("Failed to start command");
+                }
+                changed = false;
+                continue;
+            }
+            println!("Waiting for next change event");
+            let _ = ch.recv().expect("Channel was closed!!!");
+            changed = true;
+            poll_time = Instant::now();
+            continue;
+        } else {
+            println!("We do not have a poll time");
+            println!("Waiting for next change event");
+            let _ = ch.recv().expect("Channel was closed!!!");
+            if !run_loop_step(&mut exec) {
+                println!("Failed to start command");
+            }
         }
-        //if let Err(err) = exec.check() {
-        //    println!("Error running command! {}", err);
-        //    println!("Continuing");
-        //};
-        // Default to not running the command.
-        if !run_loop_step(&ch, &mut exec) {
-            println!("Failed to start command");
-        }
+        poll_time = Instant::now();
+        changed = false;
     }
 }
 
-fn run_loop_step(ch: &Receiver<()>, exec: &mut CancelableProcess) -> bool {
-    let _ = ch.recv().unwrap();
+fn run_loop_step(exec: &mut CancelableProcess) -> bool {
     // We always want to check on our process each iteration of the loop.
     // set signal to false so we won't trigger on the
     // next loop iteration unless we recieved more events.
