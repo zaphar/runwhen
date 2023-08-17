@@ -71,55 +71,37 @@ fn watch_for_change_events(
     println!("Spawning command");
     exec.spawn().expect("Failed to start command");
     println!("Starting watch loop");
-    let mut poll_time = Instant::now();
-    let mut changed = false;
+    run_loop_step(&mut exec);
     println!("Waiting for first change event");
-    let _ = ch.recv().expect("Channel was closed!!!");
-    loop {
-        // Wait our requisit number of seconds
-        if let Some(poll) = poll {
-            println!("We have a poll time {:?}", poll);
-            // If our time has passed and the value has changed then run our step immediately
-            if changed && Instant::now().duration_since(poll_time) >= poll {
-                println!(
-                    "Recieved changed event and waited: {:?}",
-                    Instant::now().duration_since(poll_time)
-                );
-                if !run_loop_step(&mut exec) {
-                    println!("Failed to start command");
-                }
-                changed = false;
+    if let Some(poll) = poll {
+        let mut poll_time = Instant::now();
+        loop {
+            let _ = ch.recv().expect("Channel was closed!!!");
+            let elapsed = Instant::now().duration_since(poll_time);
+            poll_time = Instant::now();
+            if elapsed >= poll {
+                run_loop_step(&mut exec);
                 continue;
             }
-            println!("Waiting for next change event");
-            let _ = ch.recv().expect("Channel was closed!!!");
-            changed = true;
-            poll_time = Instant::now();
-            continue;
-        } else {
-            println!("We do not have a poll time");
-            println!("Waiting for next change event");
-            let _ = ch.recv().expect("Channel was closed!!!");
-            if !run_loop_step(&mut exec) {
-                println!("Failed to start command");
-            }
         }
-        poll_time = Instant::now();
-        changed = false;
+    } else {
+        loop {
+            let _ = ch.recv().expect("Channel was closed!!!");
+            run_loop_step(&mut exec);
+        }
     }
 }
 
-fn run_loop_step(exec: &mut CancelableProcess) -> bool {
+fn run_loop_step(exec: &mut CancelableProcess) {
     // We always want to check on our process each iteration of the loop.
     // set signal to false so we won't trigger on the
     // next loop iteration unless we recieved more events.
     // On a true signal we want to start or restart our process.
     println!("Restarting process");
     if let Err(err) = exec.reset() {
+        println!("Failed to start command");
         println!("{:?}", err);
-        return false;
     }
-    return true;
 }
 
 fn wait_for_fs_events(
@@ -146,8 +128,6 @@ fn wait_for_fs_events(
     if let Some(exclude) = excluded {
         for ef in exclude.iter() {
             patterns.push(glob::Pattern::new(*ef).expect("Invalid path pattern"));
-            //patterns.push(ef.clone());
-            println!("Added pattern {:?}", patterns.iter().last());
         }
     }
     loop {
@@ -156,9 +136,7 @@ fn wait_for_fs_events(
                 // TODO(jwall): Filter this based on the exclude pattern
                 if let Some(f) = crate::events::get_file(&event) {
                     for pat in patterns.iter() {
-                        println!("Testing pattern {:?} against {:?}", pat, f);
                         if pat.matches_path(&f) {
-                            println!("Excluding: {:?}", f);
                             continue;
                         }
                     }
