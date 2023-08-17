@@ -16,6 +16,7 @@
 extern crate clap;
 extern crate humantime;
 extern crate notify;
+extern crate glob;
 
 use std::{process, str::FromStr};
 
@@ -46,6 +47,10 @@ fn do_flags() -> clap::ArgMatches {
                 .arg(
                     arg!(-f --file).name("file")
                         .takes_value(true).help("File or directory to watch for changes"),
+                )
+                .arg(
+                    arg!(-e --exclude).name("exclude")
+                        .takes_value(true).help("path names to skip when watching. Specified in unix glob format."),
                 )
                 .arg(arg!(--touch).name("filetouch").help("Use file or directory timestamps to monitor for changes."))
             .arg(arg!(--poll).name("poll").takes_value(true).value_parser(value_parser!(humantime::Duration)).help("Duration of time between polls")))
@@ -90,8 +95,12 @@ fn main() {
             Some(d) => Some((*d).into()),
             None => None,
         };
+        let exclude = match matches.values_of("exclude") {
+            Some(vr) => Some(vr.collect()),
+            None => None,
+        };
         println!("Enforcing a poll time of {:?}", duration);
-        Box::new(FileProcess::new(cmd, maybe_env, file, method, duration))
+        Box::new(FileProcess::new(cmd, maybe_env, file, exclude, method, duration))
     } else if let Some(matches) = app.subcommand_matches("timer") {
         // TODO(jwall): This should use cancelable commands.
         // Unwrap because this flag is required.

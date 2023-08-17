@@ -16,6 +16,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use glob;
 use notify::{watcher, RecursiveMode, Watcher};
 
 use error::CommandError;
@@ -27,6 +28,7 @@ pub struct FileProcess<'a> {
     cmd: &'a str,
     env: Option<Vec<String>>,
     files: Vec<&'a str>,
+    exclude: Option<Vec<&'a str>>,
     method: WatchEventType,
     poll: Option<Duration>,
 }
@@ -36,6 +38,7 @@ impl<'a> FileProcess<'a> {
         cmd: &'a str,
         env: Option<Vec<String>>,
         file: Vec<&'a str>,
+        exclude: Option<Vec<&'a str>>,
         method: WatchEventType,
         poll: Option<Duration>,
     ) -> FileProcess<'a> {
@@ -44,6 +47,7 @@ impl<'a> FileProcess<'a> {
             env,
             method,
             poll,
+            exclude,
             files: file,
         }
     }
@@ -122,6 +126,7 @@ fn wait_for_fs_events(
     ch: Sender<()>,
     method: WatchEventType,
     files: &Vec<&str>,
+    excluded: &Option<Vec<&str>>,
 ) -> Result<(), CommandError> {
     // Notify requires a channel for communication.
     let (tx, rx) = channel();
@@ -137,9 +142,29 @@ fn wait_for_fs_events(
         watcher.watch(*file, RecursiveMode::Recursive)?;
         println!("Watching {:?}", *file);
     }
+    let mut patterns = Vec::new();
+    if let Some(exclude) = excluded {
+        for ef in exclude.iter() {
+            patterns.push(glob::Pattern::new(*ef).expect("Invalid path pattern"));
+            //patterns.push(ef.clone());
+            println!("Added pattern {:?}", patterns.iter().last());
+        }
+    }
     loop {
         let evt: WatchEventType = match rx.recv() {
-            Ok(event) => WatchEventType::from(event),
+            Ok(event) => {
+                // TODO(jwall): Filter this based on the exclude pattern
+                if let Some(f) = crate::events::get_file(&event) {
+                    for pat in patterns.iter() {
+                        println!("Testing pattern {:?} against {:?}", pat, f);
+                        if pat.matches_path(&f) {
+                            println!("Excluding: {:?}", f);
+                            continue;
+                        }
+                    }
+                }
+                WatchEventType::from(event)
+            }
             Err(e) => {
                 println!("Watch Error: {}", e);
                 WatchEventType::Error
@@ -175,7 +200,7 @@ impl<'a> Process for FileProcess<'a> {
                 watch_for_change_events(rx, cmd, env, poll);
             }
         });
-        wait_for_fs_events(tx, self.method.clone(), &self.files)?;
+        wait_for_fs_events(tx, self.method.clone(), &self.files, &self.exclude)?;
         Ok(())
     }
 }

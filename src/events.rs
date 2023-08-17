@@ -21,6 +21,19 @@ pub enum WatchEventType {
     Ignore,
 }
 
+pub fn get_file(evt: &DebouncedEvent) -> Option<&std::path::PathBuf> {
+    match evt {
+        DebouncedEvent::NoticeWrite(b)
+        | DebouncedEvent::NoticeRemove(b)
+        | DebouncedEvent::Create(b)
+        | DebouncedEvent::Write(b)
+        | DebouncedEvent::Chmod(b)
+        | DebouncedEvent::Remove(b)
+        | DebouncedEvent::Rename(b, _) => Some(b),
+        DebouncedEvent::Error(_, _) | DebouncedEvent::Rescan => None,
+    }
+}
+
 impl From<DebouncedEvent> for WatchEventType {
     fn from(e: DebouncedEvent) -> WatchEventType {
         match e {
