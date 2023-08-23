@@ -14,9 +14,9 @@
 // runwhen - A utility that runs commands on user defined triggers.
 #[macro_use]
 extern crate clap;
+extern crate glob;
 extern crate humantime;
 extern crate notify;
-extern crate glob;
 
 use std::{process, str::FromStr};
 
@@ -58,7 +58,7 @@ fn do_flags() -> clap::ArgMatches {
             clap::Command::new("timer")
                 .about("Run command on a timer")
                 .arg(arg!(-t --duration).takes_value(true).value_parser(value_parser!(humantime::Duration)).help("Duration between runs"))
-                .arg(arg!(-n --repeat).value_parser(value_parser!(u32))).about("Number of times to run before finishing"))
+                .arg(arg!(-n --repeat).value_parser(value_parser!(u32)).help("Number of times to run before finishing")))
         .subcommand(
             clap::Command::new("success")
             .about("Run a command when a test command succeeds")
@@ -80,7 +80,7 @@ fn main() {
         }
         maybe_env = Some(env_vec);
     }
-    
+
     let mut proc: Box<dyn Process> = if let Some(matches) = app.subcommand_matches("watch") {
         let file = match matches.values_of("file") {
             Some(v) => v.collect(),
@@ -100,7 +100,9 @@ fn main() {
             None => None,
         };
         println!("Enforcing a poll time of {:?}", duration);
-        Box::new(FileProcess::new(cmd, maybe_env, file, exclude, method, duration))
+        Box::new(FileProcess::new(
+            cmd, maybe_env, file, exclude, method, duration,
+        ))
     } else if let Some(matches) = app.subcommand_matches("timer") {
         // TODO(jwall): This should use cancelable commands.
         // Unwrap because this flag is required.
