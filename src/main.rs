@@ -45,11 +45,11 @@ fn do_flags() -> clap::ArgMatches {
             clap::Command::new("watch")
                 .about("Trigger that fires when a file or directory changes.")
                 .arg(
-                    arg!(-f --file).name("file")
+                    arg!(-f --file ...).name("file")
                         .takes_value(true).help("File or directory to watch for changes"),
                 )
                 .arg(
-                    arg!(-e --exclude).name("exclude")
+                    arg!(-e --exclude ...).name("exclude")
                         .takes_value(true).help("path names to skip when watching. Specified in unix glob format."),
                 )
                 .arg(arg!(--touch).name("filetouch").help("Use file or directory timestamps to monitor for changes."))
